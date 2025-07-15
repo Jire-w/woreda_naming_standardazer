@@ -1,0 +1,9 @@
+credentials:
+  usernames:
+    admin:
+      name: Admin
+      password: pass123  # or a hashed value
+cookie:
+  name: woreda_app
+  key: some_secret_key
+  expiry_days: 7
