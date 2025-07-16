@@ -4,6 +4,7 @@ import os
 import sys
 import yaml
 from yaml.loader import SafeLoader
+from PIL import Image
 import streamlit_authenticator as st_auth
 
 # --- Path Setup ---
@@ -12,17 +13,13 @@ sys.path.append(current_dir)
 
 from standardizer import load_reference_data, match_and_correct
 
-# --- Streamlit Page Setup ---
-st.set_page_config(layout="wide")
-st.title("📍 Woreda Name Standardizer")
-from PIL import Image
+# --- Page Setup ---
+st.set_page_config(page_title="Woreda Standardizer", page_icon="🧭", layout="wide")
 
-# Load and display logo
-logo_path = os.path.join(current_dir, "logo", "logo.png")  # Make sure this matches your file/folder name
+# --- Logo Display ---
+logo_path = os.path.join(current_dir, "logo", "logo.png")
 if os.path.exists(logo_path):
-    logo = Image.open(logo_path)
-    st.image(logo, width=180)  # You can adjust the size
-
+    st.image(Image.open(logo_path), width=180)
 
 # --- Load config.yaml ---
 config_path = os.path.join(current_dir, 'config.yaml')
@@ -49,14 +46,14 @@ if 'cookie' not in config or not all(k in config['cookie'] for k in ['name', 'ke
 
 # --- Authenticator Setup ---
 authenticator = st_auth.Authenticate(
-    credentials=config['credentials'],
-    cookie_name=config['cookie']['name'],
-    key=config['cookie']['key'],
-    expiry_days=config['cookie']['expiry_days']
+    config['credentials'],
+    config['cookie']['name'],
+    config['cookie']['key'],
+    config['cookie']['expiry_days']
 )
 
-# --- Login ---
-name, authentication_status, username = authenticator.login('Login')
+# --- Login Form ---
+name, authentication_status, username = authenticator.login("Login", location="main")
 
 if authentication_status is False:
     st.error("❌ Username or password is incorrect.")
@@ -65,22 +62,25 @@ elif authentication_status is None:
     st.warning("🔐 Please enter your username and password.")
     st.stop()
 
-# --- Authenticated User View ---
+# --- Logged In View ---
 authenticator.logout("Logout", "sidebar")
 st.sidebar.success(f"👋 Welcome {name}!")
 
+st.title("📍 Woreda Name Standardizer")
+
 st.info("""
 This application standardizes Woreda names in your dataset using a national reference list.
-Upload a CSV with **'Region', 'Zone', 'Woreda'** columns to begin.
+Upload a CSV file containing **'Region', 'Zone', and 'Woreda'** columns to begin.
 """)
 
+# --- File Upload ---
 uploaded_file = st.file_uploader("📤 Upload your dataset (CSV)", type=["csv"])
 
-# --- Matching Threshold Sliders ---
+# --- Matching Thresholds ---
 woreda_threshold = st.slider("🎯 Woreda Match Threshold", 50, 100, 80)
 region_zone_threshold = st.slider("🌍 Region-Zone Match Threshold", 50, 100, 90)
 
-# --- Processing Uploaded File ---
+# --- File Processing ---
 if uploaded_file:
     try:
         user_df = pd.read_csv(uploaded_file)
@@ -127,16 +127,4 @@ if uploaded_file:
 
             st.download_button(
                 "⬇️ Download Unmatched CSV",
-                unmatched_df.to_csv(index=False),
-                "unmatched_woredas.csv"
-            )
-        else:
-            st.success("🎉 All rows matched successfully!")
-
-    except pd.errors.EmptyDataError:
-        st.error("❌ The uploaded CSV file is empty.")
-    except pd.errors.ParserError:
-        st.error("❌ Failed to parse CSV. Please check the formatting.")
-    except Exception as e:
-        st.error("❌ An unexpected error occurred:")
-        st.exception(e)
+                unmatched_df.to_
