@@ -66,7 +66,7 @@ elif authentication_status is None:
 authenticator.logout("Logout", "sidebar")
 st.sidebar.success(f"👋 Welcome {name}!")
 
-st.title("Woreda Name Standardizer")
+st.title("📍 Woreda Name Standardizer")
 
 st.info("""
 This application standardizes Woreda names in your dataset using a national reference list.
