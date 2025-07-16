@@ -66,7 +66,7 @@ elif authentication_status is None:
 authenticator.logout("Logout", "sidebar")
 st.sidebar.success(f"👋 Welcome {name}!")
 
-st.title("📍 Woreda Name Standardizer")
+st.title("Woreda Name Standardizer")
 
 st.info("""
 This application standardizes Woreda names in your dataset using a national reference list.
@@ -127,4 +127,16 @@ if uploaded_file:
 
             st.download_button(
                 "⬇️ Download Unmatched CSV",
-                unmatched_df.to_
+                unmatched_df.to_csv(index=False),
+                "unmatched_woredas.csv"
+            )
+        else:
+            st.success("🎉 All rows matched successfully!")
+
+    except pd.errors.EmptyDataError:
+        st.error("❌ The uploaded CSV file is empty.")
+    except pd.errors.ParserError:
+        st.error("❌ Failed to parse CSV. Please check the formatting.")
+    except Exception as e:
+        st.error("❌ An unexpected error occurred:")
+        st.exception(e)
