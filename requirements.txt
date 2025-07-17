@@ -3,4 +3,3 @@ pandas
 pyyaml
 Pillow
 rapidfuzz
-streamlit-authenticator
