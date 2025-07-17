@@ -1,41 +1,57 @@
 import streamlit as st
-import streamlit_authenticator as stauth
-import yaml
-from yaml.loader import SafeLoader
+import pandas as pd
 
-# Load config.yaml
-try:
-    with open('config.yaml') as file:
-        config = yaml.load(file, Loader=SafeLoader)
-except FileNotFoundError:
-    st.error("config.yaml file not found. Please make sure it's in the root directory.")
-    st.stop()
+st.set_page_config(page_title="Woreda Naming Standardizer", layout="centered")
 
-# Create authenticator
-authenticator = stauth.Authenticate(
-    credentials=config['credentials'],
-    cookie_name=config['cookie']['name'],
-    key=config['cookie']['key'],
-    expiry_days=config['cookie']['expiry_days'],
-    preauthorized=config.get('preauthorized', {})
-)
+st.title("🧹 Woreda Naming Standardizer Tool")
+st.markdown("Upload a CSV file with Woreda names and get a cleaned version.")
 
-# Render login form
-name, authentication_status, username = authenticator.login("Login", location="main")
+# File upload
+uploaded_file = st.file_uploader("📁 Upload your CSV file", type=["csv"])
 
-# Handle login status
-if authentication_status:
-    authenticator.logout("Logout", "sidebar")
-    st.sidebar.success(f"Logged in as {name}")
-    st.title("Woreda Naming Standardizer App")
-    st.write("✅ You are now logged in. You can add your main app features below.")
-    
-    # Example content
-    st.subheader("Welcome to the Standardizer!")
-    st.write("This is where your app’s main functionality will appear.")
-    
-elif authentication_status is False:
-    st.error("❌ Incorrect username or password")
+if uploaded_file is not None:
+    try:
+        df = pd.read_csv(uploaded_file)
+        st.success("✅ File uploaded successfully.")
+        st.write("Preview of uploaded data:", df.head())
 
-elif authentication_status is None:
-    st.warning("🔐 Please enter your username and password")
+        # Select column to standardize
+        column_name = st.selectbox("📌 Select the column that contains Woreda names", df.columns)
+
+        # Standardization function
+        def clean_woreda_name(name):
+            if pd.isna(name):
+                return ""
+            name = str(name).strip().lower()
+            replacements = {
+                "woreda": "",
+                "sub city": "",
+                "subcity": "",
+                "zone": "",
+                "-": " ",
+                "_": " "
+            }
+            for old, new in replacements.items():
+                name = name.replace(old, new)
+            return " ".join(name.title().split())
+
+        # Apply cleaning
+        df["Standardized_Woreda"] = df[column_name].apply(clean_woreda_name)
+        st.success("✅ Woreda names standardized.")
+
+        # Display result
+        st.subheader("🧾 Cleaned Data Preview")
+        st.write(df[[column_name, "Standardized_Woreda"]].head())
+
+        # Download button
+        csv = df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="📥 Download Cleaned CSV",
+            data=csv,
+            file_name="standardized_woreda.csv",
+            mime="text/csv"
+        )
+    except Exception as e:
+        st.error(f"❌ Error processing file: {e}")
+else:
+    st.info("📎 Please upload a CSV file to begin.")
