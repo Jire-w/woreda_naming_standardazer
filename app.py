@@ -21,7 +21,7 @@ if os.path.exists(logo_path):
 # --- Title ---
 st.markdown("""
 <h1 style='text-align: center; color: #2C3E50; font-family: "Segoe UI", sans-serif;'>
-📍 Woreda Name Standardizer
+Woreda Name Standardizer
 </h1>
 """, unsafe_allow_html=True)
 
