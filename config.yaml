@@ -1,9 +1,13 @@
 credentials:
   usernames:
-    admin:
-      name: Admin
-      password: pass123  # or a hashed value
+    jiregna:
+      email: jwirtu@gmail.com
+      name: Jiregna
+      password: '$2b$12$ufRtIMusJNtxneWt2DzuLOojuXcOuiZqCEfc73kvlvU3qOEZbBAaa', '$2b$12$pDu3lgCqUuB.aIznlXD56ugONIP1PH3saTJMpQNW86a7J2tBjmoh6'  # paste your hash here
 cookie:
-  name: woreda_app
-  key: some_secret_key
-  expiry_days: 7
+  expiry_days: 1
+  key: 'some_signature_key'
+  name: 'woreda_login'
+preauthorized:
+  emails:
+    - jwirtu@gmali.com
