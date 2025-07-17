@@ -3,7 +3,7 @@ credentials:
     Jiregna:
       email: jwirtu@gmail.com
       name: Jiregna Wirtu
-      password: '$2b$12$ufRtIMusJNtxneWt2DzuLOojuXcOuiZqCEfc73kvlvU3qOEZbBAaa', '$2b$12$pDu3lgCqUuB.aIznlXD56ugONIP1PH3saTJMpQNW86a7J2tBjmoh6' # Replace with real hashed password
+      password: '$2b$12$ufRtIMusJNtxneWt2DzuLOojuXcOuiZqCEfc73kvlvU3qOEZbBAaa', '$2b$12$pDu3lgCqUuB.aIznlXD56ugONIP1PH3saTJMpQNW86a7J2tBjmoh6'
 cookie:
   expiry_days: 30
   key: some_signature_key
@@ -11,4 +11,5 @@ cookie:
 preauthorized:
   emails:
     - jwirtu@gmail.com
+
 
