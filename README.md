@@ -1,1 +1,1 @@
-# woreda_naming_standardazer
+# woreda_naming_standardizer
