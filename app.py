@@ -6,13 +6,10 @@ import yaml
 from yaml.loader import SafeLoader
 from PIL import Image
 import streamlit_authenticator as st_auth
-
 # --- Path Setup ---
 current_dir = os.path.dirname(__file__)
 sys.path.append(current_dir)
-
 from standardizer import load_reference_data, match_and_correct
-
 # --- Page Setup ---
 st.set_page_config(page_title="Woreda Standardizer", page_icon="🧭", layout="wide")
 
@@ -66,7 +63,7 @@ elif authentication_status is None:
 authenticator.logout("Logout", "sidebar")
 st.sidebar.success(f"👋 Welcome {name}!")
 
-st.title("📍 Woreda Name Standardizer")
+st.title("Woreda Name Standardizer")
 
 st.info("""
 This application standardizes Woreda names in your dataset using a national reference list.
