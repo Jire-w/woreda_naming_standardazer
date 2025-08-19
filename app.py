@@ -1,109 +1,120 @@
 # app.py
 import streamlit as st
 import pandas as pd
-from standardizer import match_and_correct
+from standardizer import match_and_merge_two_datasets
 import os
 
 def run_app():
-    """Main function to run the Streamlit app."""
-    
-    # --- Setup page ---
+    """Main function to run the Streamlit app for merging two datasets."""
+
     st.set_page_config(
-        page_title="Woreda Standardizer Tool",
-        page_icon="🧭",
+        page_title="Data Matcher & Merger",
+        page_icon="🔗",
         layout="wide"
     )
 
-    # --- Load Logo (Note: Ensure the 'logo' folder and file exist) ---
-    # This assumes a 'logo' folder in the same directory as app.py
-    # If using a relative path, ensure your directory structure is correct
-    try:
-        from PIL import Image
-        current_dir = os.path.dirname(__file__)
-        logo_path = os.path.join(current_dir, "logo", "your_logo.png")
-        if os.path.exists(logo_path):
-            logo = Image.open(logo_path)
-            st.image(logo, width=140)
-    except ImportError:
-        st.warning("Pillow library not found. Logo image will not be displayed.")
-    
-    # --- Title ---
+    # --- Header and Instructions ---
     st.markdown("""
     <h1 style='text-align: center; color: #2C3E50; font-family: "Segoe UI", sans-serif;'>
-    Woreda Name Standardizer
+    Health Facility Data Matcher
     </h1>
+    <h3 style='text-align: center; color: #5D6D7E;'>
+    Merge and Standardize Two Datasets
+    </h3>
     """, unsafe_allow_html=True)
-    
-    # --- Instructions ---
+
     st.info("""
-    This tool helps you clean and standardize Woreda names in your dataset by comparing them with a national reference list.
-    Make sure your file includes **Region**, **Zone**, and **Woreda** columns (CSV format).
+    This tool matches records from two datasets based on fuzzy matching of **Region**, **Zone**, **Woreda**, and **Health Facilities** names. It then combines the remaining data from both files into a single output.
+    
+    Make sure both of your files are in CSV format and contain the key columns.
     """)
 
-    # --- File Upload ---
-    uploaded_file = st.file_uploader("📤 Upload your Woreda dataset (.csv)", type="csv")
+    # --- File Uploads ---
+    col1, col2 = st.columns(2)
+    with col1:
+        uploaded_file1 = st.file_uploader(
+            "📤 Upload Dataset 1 (e.g., Longitude/Latitude)",
+            type="csv"
+        )
+    with col2:
+        uploaded_file2 = st.file_uploader(
+            "📤 Upload Dataset 2 (e.g., Penta 1/Penta 2)",
+            type="csv"
+        )
 
     # --- Threshold Sliders ---
-    woreda_threshold = st.slider(
-        "🎯 Woreda Matching Threshold", min_value=50, max_value=100, value=80,
-        help="Controls how strictly Woreda names are matched."
-    )
-    region_zone_threshold = st.slider(
-        "🌍 Region & Zone Matching Threshold", min_value=50, max_value=100, value=90,
-        help="Controls how strictly Region & Zone names are matched."
+    woreda_hf_threshold = st.slider(
+        "🎯 Matching Threshold",
+        min_value=50, max_value=100, value=80,
+        help="Controls how strictly records are matched. Lower values allow for more typos but may lead to incorrect matches."
     )
 
     # --- Processing ---
-    if uploaded_file:
+    if uploaded_file1 and uploaded_file2:
         try:
-            # Read the uploaded file
-            user_df = pd.read_csv(uploaded_file)
-            user_df.columns = user_df.columns.str.strip().str.lower()
-            required_columns = ['region', 'zone', 'woreda']
+            df1 = pd.read_csv(uploaded_file1)
+            df2 = pd.read_csv(uploaded_file2)
 
-            # Check for required columns
-            if not all(col in user_df.columns for col in required_columns):
-                st.error(f"Your file must include these columns: **{', '.join(required_columns)}**")
-                st.info(f"Detected columns: **{', '.join(user_df.columns)}**")
-                return
+            # Define the key columns for matching
+            key_columns = ['region', 'zone', 'woreda', 'health_facilities']
 
-            st.info("🔄 Processing your data...")
+            # Check for required columns in both dataframes
+            required_in_df1 = [col for col in key_columns if col not in df1.columns.str.lower()]
+            required_in_df2 = [col for col in key_columns if col not in df2.columns.str.lower()]
+
+            if required_in_df1:
+                st.error(f"Dataset 1 is missing the following required columns: **{', '.join(required_in_df1)}**")
+            if required_in_df2:
+                st.error(f"Dataset 2 is missing the following required columns: **{', '.join(required_in_df2)}**")
             
-            # Use the core logic from standardizer.py
-            corrected_df, unmatched_df = match_and_correct(
-                user_df.copy(),
-                threshold=woreda_threshold,
-                region_zone_threshold=region_zone_threshold
-            )
+            if not required_in_df1 and not required_in_df2:
+                st.info("🔄 Processing and merging your data...")
 
-            st.success("✅ Woreda names standardized successfully!")
+                # Call the new core matching function
+                merged_df, unmatched_df1, unmatched_df2 = match_and_merge_two_datasets(
+                    df1,
+                    df2,
+                    key_columns,
+                    woreda_hf_threshold
+                )
 
-            # Display and provide download button for corrected data
-            st.subheader("✅ Standardized Data")
-            st.dataframe(corrected_df)
-            st.download_button(
-                "⬇️ Download Corrected File",
-                corrected_df.to_csv(index=False),
-                "standardized_woredas.csv",
-                "text/csv"
-            )
+                st.success("✅ Datasets merged successfully!")
 
-            # Unmatched records section
-            if not unmatched_df.empty:
-                st.warning(f"⚠️ {len(unmatched_df)} rows could not be matched.")
-                st.subheader("❌ Unmatched Rows")
-                st.dataframe(unmatched_df)
+                # Display and provide download buttons for the results
+                st.subheader("✅ Merged Data")
+                st.dataframe(merged_df)
                 st.download_button(
-                    "⬇️ Download Unmatched Rows",
-                    unmatched_df.to_csv(index=False),
-                    "unmatched_woredas.csv",
+                    "⬇️ Download Merged Data",
+                    merged_df.to_csv(index=False).encode('utf-8'),
+                    "merged_data.csv",
                     "text/csv"
                 )
-            else:
-                st.info("🎉 All rows matched successfully!")
+
+                # Show unmatched records from both datasets
+                if not unmatched_df1.empty:
+                    st.warning(f"⚠️ {len(unmatched_df1)} rows from Dataset 1 could not be matched.")
+                    st.subheader("❌ Unmatched Rows (Dataset 1)")
+                    st.dataframe(unmatched_df1)
+                    st.download_button(
+                        "⬇️ Download Unmatched Rows from Dataset 1",
+                        unmatched_df1.to_csv(index=False).encode('utf-8'),
+                        "unmatched_dataset1.csv",
+                        "text/csv"
+                    )
+                
+                if not unmatched_df2.empty:
+                    st.warning(f"⚠️ {len(unmatched_df2)} rows from Dataset 2 could not be matched.")
+                    st.subheader("❌ Unmatched Rows (Dataset 2)")
+                    st.dataframe(unmatched_df2)
+                    st.download_button(
+                        "⬇️ Download Unmatched Rows from Dataset 2",
+                        unmatched_df2.to_csv(index=False).encode('utf-8'),
+                        "unmatched_dataset2.csv",
+                        "text/csv"
+                    )
 
         except Exception as e:
-            st.error("An error occurred while processing your file.")
+            st.error("An error occurred while processing your files.")
             st.exception(e)
 
 if __name__ == '__main__':
