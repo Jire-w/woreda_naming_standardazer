@@ -1,5 +1,5 @@
-streamlit
+Flask
 pandas
-pyyaml
-Pillow
 rapidfuzz
+pyyaml
+xlsxwriter
