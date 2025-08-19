@@ -3,6 +3,12 @@ import streamlit as st
 import pandas as pd
 from standardizer import match_and_merge_two_datasets
 from rapidfuzz import process, fuzz
+import base64
+
+def get_base64_image(image_path):
+    """Encodes an image to a Base64 string for direct HTML embedding."""
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode()
 
 def run_app():
     """Main function to run the Streamlit app for merging two datasets."""
@@ -13,14 +19,22 @@ def run_app():
         layout="wide"
     )
 
-    # --- Header and Instructions ---
-    st.markdown("""
-    <h1 style='text-align: center; color: #2C3E50; font-family: "Segoe UI", sans-serif;'>
-    Woreda Naming and Data Matcher
-    </h1>
-    <h3 style='text-align: center; color: #5D6D7E;'>
-    Merge and Standardize Two Datasets
-    </h3>
+    # --- Header with Custom Styling ---
+    logo_base64 = get_base64_image("image_0879e9.png")
+    flag_base64 = get_base64_image("image_087aab.png")
+
+    st.markdown(f"""
+    <div style="background: linear-gradient(to right, #004d40, #000000); padding: 10px; border-radius: 10px; margin-bottom: 20px; position: relative; color: white;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+            <img src="data:image/png;base64,{logo_base64}" style="height: 60px; margin: 0 10px;">
+            <div style="text-align: center; flex-grow: 1;">
+                <h1 style="color: white; font-family: 'Segoe UI', sans-serif; margin-bottom: 0;">Health Facility Data Matcher</h1>
+                <h3 style="color: #EEEEEE; margin-top: 0; font-weight: normal;">Merge and Standardize Two Datasets</h3>
+            </div>
+            <img src="data:image/png;base64,{logo_base64}" style="height: 60px; margin: 0 10px;">
+        </div>
+        <img src="data:image/png;base64,{flag_base64}" style="position: absolute; top: 10px; right: 10px; height: 50px;">
+    </div>
     """, unsafe_allow_html=True)
 
     st.info("""
@@ -33,12 +47,12 @@ def run_app():
     col1, col2 = st.columns(2)
     with col1:
         uploaded_file1 = st.file_uploader(
-            "📤 Upload Dataset 1",
+            "📤 Upload Dataset 1 (e.g., Longitude/Latitude)",
             type=["csv", "xlsx"]
         )
     with col2:
         uploaded_file2 = st.file_uploader(
-            "📤 Upload Dataset 2",
+            "📤 Upload Dataset 2 (e.g., Penta 1/Penta 2)",
             type=["csv", "xlsx"]
         )
 
