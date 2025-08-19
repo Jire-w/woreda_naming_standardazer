@@ -2,7 +2,6 @@
 import streamlit as st
 import pandas as pd
 from standardizer import match_and_merge_two_datasets
-import os
 from rapidfuzz import process, fuzz
 
 def run_app():
@@ -44,10 +43,21 @@ def run_app():
         )
 
     # --- Threshold Sliders ---
-    matching_threshold = st.slider(
-        "🎯 Matching Threshold",
+    st.subheader("🎯 Matching Thresholds")
+    region_threshold = st.slider(
+        "Region Matching Threshold",
         min_value=50, max_value=100, value=80,
-        help="Controls how strictly records are matched. Lower values allow for more typos but may lead to incorrect matches."
+        help="Controls the strictness of matching for 'Region' names."
+    )
+    zone_threshold = st.slider(
+        "Zone Matching Threshold",
+        min_value=50, max_value=100, value=80,
+        help="Controls the strictness of matching for 'Zone' names."
+    )
+    woreda_threshold = st.slider(
+        "Woreda Matching Threshold",
+        min_value=50, max_value=100, value=80,
+        help="Controls the strictness of matching for 'Woreda' names."
     )
     
     # --- Processing ---
@@ -75,7 +85,7 @@ def run_app():
                 missing_cols = []
                 for req_col in required_cols:
                     best_match = process.extractOne(req_col, normalized_cols, scorer=fuzz.ratio)
-                    if best_match and best_match[1] >= 85: # Use a high threshold for column names
+                    if best_match and best_match[1] >= 85: # High threshold for column names
                         matched_col = df.columns[normalized_cols.index(best_match[0])]
                         col_mapping[req_col] = matched_col
                     else:
@@ -94,9 +104,9 @@ def run_app():
             else:
                 st.info("🔄 Processing and merging your data...")
 
-                # Call the core matching function with the column mappings
+                # Call the core matching function with the new thresholds
                 merged_df, unmatched_df1, unmatched_df2 = match_and_merge_two_datasets(
-                    df1, df2, col_mapping1, col_mapping2, matching_threshold
+                    df1, df2, col_mapping1, col_mapping2, region_threshold, zone_threshold, woreda_threshold
                 )
 
                 st.success("✅ Datasets merged successfully!")
