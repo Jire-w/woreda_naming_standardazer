@@ -1,97 +1,63 @@
+# app.py
+from flask import Flask, request, render_template, send_file
 import pandas as pd
-from rapidfuzz import process, fuzz
+from io import BytesIO
+from standardizer import match_and_merge  # Import the function from your new file
+import yaml
 
-def load_reference_data(path="data/reference.csv"):
-    """
-    Load and clean the reference data for region, zone, and woreda standardization.
-    """
-    df = pd.read_csv(path)
-    
-    # Normalize column names
-    df.columns = df.columns.str.strip().str.lower()
+app = Flask(__name__)
 
-    # Ensure string values and clean whitespace
-    for col in ['region', 'zone', 'woreda']:
-        df[col] = df[col].astype(str).str.strip().str.lower()
+# Load configuration from config.yaml
+with open('config.yaml', 'r') as file:
+    config = yaml.safe_load(file)
 
-    return df
+@app.route('/')
+def home():
+    return render_template('index.html')
 
-def match_and_correct(user_df, reference_df, threshold=80, region_zone_threshold=90):
-    """
-    Match and correct Woreda names based on fuzzy matching against a reference dataset.
-    
-    Parameters:
-        user_df (DataFrame): Input data with columns ['region', 'zone', 'woreda']
-        reference_df (DataFrame): Cleaned reference data
-        threshold (int): Match score threshold for woreda name
-        region_zone_threshold (int): Match score threshold for region-zone pair
-        
-    Returns:
-        corrected_df (DataFrame): Original dataframe with an added 'Standardized_Woreda' column
-        unmatched_df (DataFrame): Rows that couldn't be matched
-    """
+@app.route('/match', methods=['POST'])
+def match_data():
+    if 'file1' not in request.files or 'file2' not in request.files:
+        return "Please upload both datasets.", 400
 
-    # Clean user input columns
-    user_df.columns = user_df.columns.str.strip().str.lower()
-    
-    unmatched_rows = []
-    corrected_woredas = []
+    file1 = request.files['file1']
+    file2 = request.files['file2']
 
-    # Precompute region-zone strings from reference data
-    reference_region_zone_pairs = (
-        reference_df[['region', 'zone']]
-        .drop_duplicates()
-        .apply(lambda x: f"{x['region']}_{x['zone']}", axis=1)
-        .tolist()
+    try:
+        df1 = pd.read_csv(file1)
+        df2 = pd.read_csv(file2)
+    except Exception as e:
+        return f"Error reading files. Please ensure they are in a valid CSV format. Error: {e}", 400
+
+    # Get key columns from configuration
+    key_columns = config['matching']['key_columns']
+    threshold = config['matching']['threshold']
+    multi_level_threshold = config['matching']['multi_level_threshold']
+
+    # Call the core matching function from the standardizer module
+    merged_df, unmatched_df1, unmatched_df2 = match_and_merge(
+        df1,
+        df2,
+        key_columns,
+        threshold,
+        multi_level_threshold
     )
 
-    # Iterate through user rows
-    for _, row in user_df.iterrows():
-        user_region = str(row.get('region', '')).strip().lower()
-        user_zone = str(row.get('zone', '')).strip().lower()
-        user_woreda = str(row.get('woreda', '')).strip().lower()
+    # Prepare data for download
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        merged_df.to_excel(writer, sheet_name='Merged Data', index=False)
+        unmatched_df1.to_excel(writer, sheet_name='Unmatched (Dataset 1)', index=False)
+        unmatched_df2.to_excel(writer, sheet_name='Unmatched (Dataset 2)', index=False)
 
-        best_matched_ref_region = ''
-        best_matched_ref_zone = ''
-        current_woreda_match = ''
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='merged_data.xlsx'
+    )
 
-        # Step 1: Fuzzy match region-zone
-        if user_region and user_zone:
-            user_rz = f"{user_region}_{user_zone}"
-            rz_match = process.extractOne(user_rz, reference_region_zone_pairs, scorer=fuzz.ratio)
-            
-            if rz_match:
-                rz_best_match, rz_score, _ = rz_match
-                if rz_score >= region_zone_threshold:
-                    best_matched_ref_region, best_matched_ref_zone = rz_best_match.split('_', 1)
-
-        # Step 2: Match woreda within the matched region and zone
-        if best_matched_ref_region and best_matched_ref_zone and user_woreda:
-            subset = reference_df[
-                (reference_df['region'] == best_matched_ref_region) &
-                (reference_df['zone'] == best_matched_ref_zone)
-            ]
-
-            if not subset.empty:
-                woreda_choices = subset['woreda'].tolist()
-                w_match = process.extractOne(user_woreda, woreda_choices, scorer=fuzz.token_set_ratio)
-                
-                if w_match:
-                    best_woreda_match, w_score, _ = w_match
-                    if w_score >= threshold:
-                        current_woreda_match = best_woreda_match
-
-        # Step 3: Append result
-        if current_woreda_match:
-            corrected_woredas.append(current_woreda_match.title())
-        else:
-            corrected_woredas.append('')
-            unmatched_rows.append(row.to_dict())
-
-    # Add corrected column
-    user_df['Standardized_Woreda'] = corrected_woredas
-
-    # Create DataFrame of unmatched rows
-    unmatched_df = pd.DataFrame(unmatched_rows)
-
-    return user_df, unmatched_df
+if __name__ == '__main__':
+    app.run(debug=True)
