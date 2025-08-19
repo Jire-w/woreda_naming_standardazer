@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 from standardizer import match_and_merge_two_datasets
 import os
+from rapidfuzz import process, fuzz
 
 def run_app():
     """Main function to run the Streamlit app for merging two datasets."""
@@ -26,7 +27,7 @@ def run_app():
     st.info("""
     This tool matches records from two datasets based on fuzzy matching of **Region**, **Zone**, **Woreda**, and **Health Facilities** names. It then combines the remaining data from both files into a single output.
     
-    Make sure both of your files are in CSV format and contain the key columns.
+    Make sure both of your files are in CSV format and contain columns for these key fields. The tool will automatically find the best-matching columns.
     """)
 
     # --- File Uploads ---
@@ -43,54 +44,65 @@ def run_app():
         )
 
     # --- Threshold Sliders ---
-    woreda_hf_threshold = st.slider(
+    matching_threshold = st.slider(
         "🎯 Matching Threshold",
         min_value=50, max_value=100, value=80,
         help="Controls how strictly records are matched. Lower values allow for more typos but may lead to incorrect matches."
     )
-
+    
     # --- Processing ---
     if uploaded_file1 and uploaded_file2:
         try:
             df1 = pd.read_csv(uploaded_file1)
             df2 = pd.read_csv(uploaded_file2)
-
-            # Define the key columns for matching
-            key_columns = ['region', 'zone', 'woreda', 'health_facilities']
-
-            # Check for required columns in both dataframes
-            required_in_df1 = [col for col in key_columns if col not in df1.columns.str.lower()]
-            required_in_df2 = [col for col in key_columns if col not in df2.columns.str.lower()]
-
-            if required_in_df1:
-                st.error(f"Dataset 1 is missing the following required columns: **{', '.join(required_in_df1)}**")
-            if required_in_df2:
-                st.error(f"Dataset 2 is missing the following required columns: **{', '.join(required_in_df2)}**")
             
-            if not required_in_df1 and not required_in_df2:
+            # These are the required column names for our internal logic
+            required_key_columns = ['region', 'zone', 'woreda', 'health_facilities']
+
+            # Function to create a mapping from internal keys to user's column names
+            def map_columns(df, required_cols):
+                normalized_cols = [col.strip().lower() for col in df.columns]
+                col_mapping = {}
+                missing_cols = []
+                for req_col in required_cols:
+                    best_match = process.extractOne(req_col, normalized_cols, scorer=fuzz.ratio)
+                    if best_match and best_match[1] >= 85: # Use a high threshold for column names
+                        matched_col = df.columns[normalized_cols.index(best_match[0])]
+                        col_mapping[req_col] = matched_col
+                    else:
+                        missing_cols.append(req_col)
+                return col_mapping, missing_cols
+
+            # Get column mappings for both dataframes
+            col_mapping1, missing1 = map_columns(df1, required_key_columns)
+            col_mapping2, missing2 = map_columns(df2, required_key_columns)
+            
+            if missing1 or missing2:
+                if missing1:
+                    st.error(f"Dataset 1 is missing the following required columns or a good match could not be found: **{', '.join(missing1)}**")
+                if missing2:
+                    st.error(f"Dataset 2 is missing the following required columns or a good match could not be found: **{', '.join(missing2)}**")
+            else:
                 st.info("🔄 Processing and merging your data...")
 
-                # Call the new core matching function
+                # Call the core matching function with the column mappings
                 merged_df, unmatched_df1, unmatched_df2 = match_and_merge_two_datasets(
-                    df1,
-                    df2,
-                    key_columns,
-                    woreda_hf_threshold
+                    df1, df2, col_mapping1, col_mapping2, matching_threshold
                 )
 
                 st.success("✅ Datasets merged successfully!")
 
-                # Display and provide download buttons for the results
+                # --- Display and Download Results ---
                 st.subheader("✅ Merged Data")
                 st.dataframe(merged_df)
                 st.download_button(
-                    "⬇️ Download Merged Data",
+                    "⬇️ Download Merged Data (.csv)",
                     merged_df.to_csv(index=False).encode('utf-8'),
                     "merged_data.csv",
                     "text/csv"
                 )
-
-                # Show unmatched records from both datasets
+                
+                # ... (code for displaying and downloading unmatched data) ...
                 if not unmatched_df1.empty:
                     st.warning(f"⚠️ {len(unmatched_df1)} rows from Dataset 1 could not be matched.")
                     st.subheader("❌ Unmatched Rows (Dataset 1)")
@@ -101,7 +113,7 @@ def run_app():
                         "unmatched_dataset1.csv",
                         "text/csv"
                     )
-                
+
                 if not unmatched_df2.empty:
                     st.warning(f"⚠️ {len(unmatched_df2)} rows from Dataset 2 could not be matched.")
                     st.subheader("❌ Unmatched Rows (Dataset 2)")
@@ -112,6 +124,7 @@ def run_app():
                         "unmatched_dataset2.csv",
                         "text/csv"
                     )
+
 
         except Exception as e:
             st.error("An error occurred while processing your files.")
