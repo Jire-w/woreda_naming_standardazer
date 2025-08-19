@@ -102,7 +102,6 @@ def run_app():
                     "text/csv"
                 )
                 
-                # ... (code for displaying and downloading unmatched data) ...
                 if not unmatched_df1.empty:
                     st.warning(f"⚠️ {len(unmatched_df1)} rows from Dataset 1 could not be matched.")
                     st.subheader("❌ Unmatched Rows (Dataset 1)")
