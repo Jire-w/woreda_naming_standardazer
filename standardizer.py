@@ -2,7 +2,7 @@
 import pandas as pd
 from rapidfuzz import process, fuzz
 
-def match_and_merge_two_datasets(df1, df2, col_mapping1, col_mapping2, threshold=80):
+def match_and_merge_two_datasets(df1, df2, col_mapping1, col_mapping2, region_threshold, zone_threshold, woreda_threshold):
     """
     Fuzzy matches and merges two datasets based on a list of key columns.
     
@@ -11,7 +11,9 @@ def match_and_merge_two_datasets(df1, df2, col_mapping1, col_mapping2, threshold
         df2 (DataFrame): The second dataset (right side of the merge).
         col_mapping1 (dict): A dictionary mapping required keys to actual column names in df1.
         col_mapping2 (dict): A dictionary mapping required keys to actual column names in df2.
-        threshold (int): Match score threshold for the final key component.
+        region_threshold (int): Match score threshold for Region.
+        zone_threshold (int): Match score threshold for Zone.
+        woreda_threshold (int): Match score threshold for Woreda.
 
     Returns:
         DataFrame: A merged dataframe with all columns from both inputs.
@@ -33,10 +35,8 @@ def match_and_merge_two_datasets(df1, df2, col_mapping1, col_mapping2, threshold
             df2_copy.rename(columns={actual_col: req_col}, inplace=True)
             df2_copy[req_col] = df2_copy[req_col].astype(str).str.strip().str.lower()
     
-    # Now, the key columns in both dataframes are standardized to the same name
+    # Define the key columns and non-key columns from df2 to be merged
     key_cols = list(col_mapping1.keys())
-    
-    # Identify non-key columns from df2 to append
     df2_non_key_cols = [col for col in df2.columns if col not in col_mapping2.values()]
     
     # Prepare for merging and tracking unmatched rows
@@ -44,32 +44,36 @@ def match_and_merge_two_datasets(df1, df2, col_mapping1, col_mapping2, threshold
     unmatched_df1_rows = []
     matched_indices_df2 = set()
     
-    # Create a list of full concatenated strings from df2 for fuzzy matching
-    df2_choices = df2_copy[key_cols].fillna('').apply(
-        lambda x: '_'.join(x.astype(str)), axis=1
-    ).tolist()
-
     # Iterate through df1 and find matches in df2
     for index1, row1 in df1_copy.iterrows():
-        query_string = '_'.join(str(row1.get(col, '')).strip() for col in key_cols)
+        found_match = False
+        
+        # Iterate through df2 to find a match for the current row from df1
+        for index2, row2 in df2_copy.iterrows():
+            if index2 in matched_indices_df2:
+                continue # Skip if this row from df2 is already matched
+                
+            region_score = fuzz.ratio(str(row1['region']), str(row2['region']))
+            zone_score = fuzz.ratio(str(row1['zone']), str(row2['zone']))
+            woreda_score = fuzz.token_set_ratio(str(row1['woreda']), str(row2['woreda']))
 
-        best_match = process.extractOne(query_string, df2_choices, scorer=fuzz.token_set_ratio)
-
-        if best_match and best_match[1] >= threshold:
-            _, score, match_index2 = best_match
-            if match_index2 not in matched_indices_df2:
-                # Start with all columns from df1
+            if (region_score >= region_threshold and 
+                zone_score >= zone_threshold and 
+                woreda_score >= woreda_threshold):
+                
+                # A match is found, prepare the combined row
                 combined_row = df1.iloc[index1].to_dict()
                 
                 # Add only the non-key columns from df2 to the combined row
                 for col in df2_non_key_cols:
-                    combined_row[col] = df2.iloc[match_index2][col]
+                    combined_row[col] = df2.iloc[index2][col]
                     
                 matched_rows.append(combined_row)
-                matched_indices_df2.add(match_index2)
-            else:
-                unmatched_df1_rows.append(df1.iloc[index1].to_dict())
-        else:
+                matched_indices_df2.add(index2)
+                found_match = True
+                break # Move to the next row in df1
+        
+        if not found_match:
             unmatched_df1_rows.append(df1.iloc[index1].to_dict())
 
     merged_df = pd.DataFrame(matched_rows)
