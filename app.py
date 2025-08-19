@@ -27,7 +27,7 @@ def run_app():
     st.info("""
     This tool matches records from two datasets based on fuzzy matching of **Region**, **Zone**, **Woreda**, and **Health Facilities** names. It then combines the remaining data from both files into a single output.
     
-    Make sure both of your files are in CSV format and contain columns for these key fields. The tool will automatically find the best-matching columns.
+    Make sure both of your files are in CSV or Excel (XLSX) format and contain columns for these key fields. The tool will automatically find the best-matching columns.
     """)
 
     # --- File Uploads ---
@@ -35,12 +35,12 @@ def run_app():
     with col1:
         uploaded_file1 = st.file_uploader(
             "📤 Upload Dataset 1 (e.g., Longitude/Latitude)",
-            type="csv"
+            type=["csv", "xlsx"]
         )
     with col2:
         uploaded_file2 = st.file_uploader(
             "📤 Upload Dataset 2 (e.g., Penta 1/Penta 2)",
-            type="csv"
+            type=["csv", "xlsx"]
         )
 
     # --- Threshold Sliders ---
@@ -53,8 +53,17 @@ def run_app():
     # --- Processing ---
     if uploaded_file1 and uploaded_file2:
         try:
-            df1 = pd.read_csv(uploaded_file1)
-            df2 = pd.read_csv(uploaded_file2)
+            # Function to read the correct file format
+            def read_file(file):
+                if file.name.endswith('.csv'):
+                    return pd.read_csv(file)
+                elif file.name.endswith('.xlsx'):
+                    return pd.read_excel(file)
+                else:
+                    return None
+
+            df1 = read_file(uploaded_file1)
+            df2 = read_file(uploaded_file2)
             
             # These are the required column names for our internal logic
             required_key_columns = ['region', 'zone', 'woreda', 'health_facilities']
