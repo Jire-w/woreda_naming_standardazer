@@ -16,7 +16,7 @@ def run_app():
     # --- Header and Instructions ---
     st.markdown("""
     <h1 style='text-align: center; color: #2C3E50; font-family: "Segoe UI", sans-serif;'>
-    Health Facility Data Matcher
+    Woreda Naming and Data Matcher
     </h1>
     <h3 style='text-align: center; color: #5D6D7E;'>
     Merge and Standardize Two Datasets
