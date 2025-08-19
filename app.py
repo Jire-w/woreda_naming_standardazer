@@ -20,9 +20,8 @@ def run_app():
     )
 
     # --- Header with Custom Styling ---
-    logo_base64 = get_base64_image("image_0879e9.png")
-    flag_base64 = get_base64_image("image_087aab.png")
-
+    logo_base64 = get_base64_image("assets/image_0879e9.png")
+flag_base64 = get_base64_image("assets/image_087aab.png")
     st.markdown(f"""
     <div style="background: linear-gradient(to right, #004d40, #000000); padding: 10px; border-radius: 10px; margin-bottom: 20px; position: relative; color: white;">
         <div style="display: flex; align-items: center; justify-content: space-between;">
