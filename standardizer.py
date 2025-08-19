@@ -37,7 +37,7 @@ def match_and_merge_two_datasets(df1, df2, col_mapping1, col_mapping2, threshold
     key_cols = list(col_mapping1.keys())
     
     # Identify non-key columns from df2 to append
-    df2_cols_to_add = [col for col in df2.columns if col not in [col_mapping2[kc] for kc in key_cols]]
+    df2_non_key_cols = [col for col in df2.columns if col not in col_mapping2.values()]
     
     # Prepare for merging and tracking unmatched rows
     matched_rows = []
@@ -62,8 +62,8 @@ def match_and_merge_two_datasets(df1, df2, col_mapping1, col_mapping2, threshold
                 combined_row = df1.iloc[index1].to_dict()
                 
                 # Add only the non-key columns from df2 to the combined row
-                for col in df2_cols_to_add:
-                    combined_row[f'dataset2_{col}'] = df2.iloc[match_index2][col]
+                for col in df2_non_key_cols:
+                    combined_row[col] = df2.iloc[match_index2][col]
                     
                 matched_rows.append(combined_row)
                 matched_indices_df2.add(match_index2)
