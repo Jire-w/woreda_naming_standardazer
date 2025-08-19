@@ -36,12 +36,9 @@ def match_and_merge_two_datasets(df1, df2, col_mapping1, col_mapping2, threshold
     # Now, the key columns in both dataframes are standardized to the same name
     key_cols = list(col_mapping1.keys())
     
-    # Rename columns in df2 to avoid conflicts during merge, keeping key_cols as-is
-    df2_renamed = df2_copy.copy()
-    for col in df2_renamed.columns:
-        if col not in key_cols:
-            df2_renamed.rename(columns={col: f'dataset2_{col}'}, inplace=True)
-
+    # Identify non-key columns from df2 to append
+    df2_cols_to_add = [col for col in df2.columns if col not in [col_mapping2[kc] for kc in key_cols]]
+    
     # Prepare for merging and tracking unmatched rows
     matched_rows = []
     unmatched_df1_rows = []
@@ -61,11 +58,13 @@ def match_and_merge_two_datasets(df1, df2, col_mapping1, col_mapping2, threshold
         if best_match and best_match[1] >= threshold:
             _, score, match_index2 = best_match
             if match_index2 not in matched_indices_df2:
-                # Add original columns from df1
+                # Start with all columns from df1
                 combined_row = df1.iloc[index1].to_dict()
                 
-                # Add original columns from df2
-                combined_row.update({f'dataset2_{col}': val for col, val in df2.iloc[match_index2].to_dict().items()})
+                # Add only the non-key columns from df2 to the combined row
+                for col in df2_cols_to_add:
+                    combined_row[f'dataset2_{col}'] = df2.iloc[match_index2][col]
+                    
                 matched_rows.append(combined_row)
                 matched_indices_df2.add(match_index2)
             else:
