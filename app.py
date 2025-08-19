@@ -1,133 +1,82 @@
-# app.py
-import streamlit as st
+# standardizer.py
 import pandas as pd
-from standardizer import match_and_merge_two_datasets
-import os
 from rapidfuzz import process, fuzz
 
-def run_app():
-    """Main function to run the Streamlit app for merging two datasets."""
-
-    st.set_page_config(
-        page_title="Data Matcher & Merger",
-        page_icon="🔗",
-        layout="wide"
-    )
-
-    # --- Header and Instructions ---
-    st.markdown("""
-    <h1 style='text-align: center; color: #2C3E50; font-family: "Segoe UI", sans-serif;'>
-    Health Facility Data Matcher
-    </h1>
-    <h3 style='text-align: center; color: #5D6D7E;'>
-    Merge and Standardize Two Datasets
-    </h3>
-    """, unsafe_allow_html=True)
-
-    st.info("""
-    This tool matches records from two datasets based on fuzzy matching of **Region**, **Zone**, **Woreda**, and **Health Facilities** names. It then combines the remaining data from both files into a single output.
+def match_and_merge_two_datasets(df1, df2, col_mapping1, col_mapping2, threshold=80):
+    """
+    Fuzzy matches and merges two datasets based on a list of key columns.
     
-    Make sure both of your files are in CSV format and contain columns for these key fields. The tool will automatically find the best-matching columns.
-    """)
+    Parameters:
+        df1 (DataFrame): The first dataset (left side of the merge).
+        df2 (DataFrame): The second dataset (right side of the merge).
+        col_mapping1 (dict): A dictionary mapping required keys to actual column names in df1.
+        col_mapping2 (dict): A dictionary mapping required keys to actual column names in df2.
+        threshold (int): Match score threshold for the final key component.
 
-    # --- File Uploads ---
-    col1, col2 = st.columns(2)
-    with col1:
-        uploaded_file1 = st.file_uploader(
-            "📤 Upload Dataset 1 (e.g., Longitude/Latitude)",
-            type="csv"
-        )
-    with col2:
-        uploaded_file2 = st.file_uploader(
-            "📤 Upload Dataset 2 (e.g., Penta 1/Penta 2)",
-            type="csv"
-        )
-
-    # --- Threshold Sliders ---
-    matching_threshold = st.slider(
-        "🎯 Matching Threshold",
-        min_value=50, max_value=100, value=80,
-        help="Controls how strictly records are matched. Lower values allow for more typos but may lead to incorrect matches."
-    )
+    Returns:
+        DataFrame: A merged dataframe with all columns from both inputs.
+        DataFrame: A dataframe with unmatched rows from df1.
+        DataFrame: A dataframe with unmatched rows from df2.
+    """
+    # Create copies of the dataframes to avoid modifying the originals
+    df1_copy = df1.copy()
+    df2_copy = df2.copy()
     
-    # --- Processing ---
-    if uploaded_file1 and uploaded_file2:
-        try:
-            df1 = pd.read_csv(uploaded_file1)
-            df2 = pd.read_csv(uploaded_file2)
+    # Standardize column names based on the provided mapping
+    for req_col, actual_col in col_mapping1.items():
+        if actual_col != req_col:
+            df1_copy.rename(columns={actual_col: req_col}, inplace=True)
+            df1_copy[req_col] = df1_copy[req_col].astype(str).str.strip().str.lower()
             
-            # These are the required column names for our internal logic
-            required_key_columns = ['region', 'zone', 'woreda', 'health_facilities']
+    for req_col, actual_col in col_mapping2.items():
+        if actual_col != req_col:
+            df2_copy.rename(columns={actual_col: req_col}, inplace=True)
+            df2_copy[req_col] = df2_copy[req_col].astype(str).str.strip().str.lower()
+    
+    # Now, the key columns in both dataframes are standardized to the same name
+    key_cols = list(col_mapping1.keys())
+    
+    # Rename columns in df2 to avoid conflicts during merge, keeping key_cols as-is
+    df2_renamed = df2_copy.copy()
+    for col in df2_renamed.columns:
+        if col not in key_cols:
+            df2_renamed.rename(columns={col: f'dataset2_{col}'}, inplace=True)
 
-            # Function to create a mapping from internal keys to user's column names
-            def map_columns(df, required_cols):
-                normalized_cols = [col.strip().lower() for col in df.columns]
-                col_mapping = {}
-                missing_cols = []
-                for req_col in required_cols:
-                    best_match = process.extractOne(req_col, normalized_cols, scorer=fuzz.ratio)
-                    if best_match and best_match[1] >= 85: # Use a high threshold for column names
-                        matched_col = df.columns[normalized_cols.index(best_match[0])]
-                        col_mapping[req_col] = matched_col
-                    else:
-                        missing_cols.append(req_col)
-                return col_mapping, missing_cols
+    # Prepare for merging and tracking unmatched rows
+    matched_rows = []
+    unmatched_df1_rows = []
+    matched_indices_df2 = set()
+    
+    # Create a list of full concatenated strings from df2 for fuzzy matching
+    df2_choices = df2_copy[key_cols].fillna('').apply(
+        lambda x: '_'.join(x.astype(str)), axis=1
+    ).tolist()
 
-            # Get column mappings for both dataframes
-            col_mapping1, missing1 = map_columns(df1, required_key_columns)
-            col_mapping2, missing2 = map_columns(df2, required_key_columns)
-            
-            if missing1 or missing2:
-                if missing1:
-                    st.error(f"Dataset 1 is missing the following required columns or a good match could not be found: **{', '.join(missing1)}**")
-                if missing2:
-                    st.error(f"Dataset 2 is missing the following required columns or a good match could not be found: **{', '.join(missing2)}**")
-            else:
-                st.info("🔄 Processing and merging your data...")
+    # Iterate through df1 and find matches in df2
+    for index1, row1 in df1_copy.iterrows():
+        query_string = '_'.join(str(row1.get(col, '')).strip() for col in key_cols)
 
-                # Call the core matching function with the column mappings
-                merged_df, unmatched_df1, unmatched_df2 = match_and_merge_two_datasets(
-                    df1, df2, col_mapping1, col_mapping2, matching_threshold
-                )
+        best_match = process.extractOne(query_string, df2_choices, scorer=fuzz.token_set_ratio)
 
-                st.success("✅ Datasets merged successfully!")
-
-                # --- Display and Download Results ---
-                st.subheader("✅ Merged Data")
-                st.dataframe(merged_df)
-                st.download_button(
-                    "⬇️ Download Merged Data (.csv)",
-                    merged_df.to_csv(index=False).encode('utf-8'),
-                    "merged_data.csv",
-                    "text/csv"
-                )
+        if best_match and best_match[1] >= threshold:
+            _, score, match_index2 = best_match
+            if match_index2 not in matched_indices_df2:
+                # Add original columns from df1
+                combined_row = df1.iloc[index1].to_dict()
                 
-                if not unmatched_df1.empty:
-                    st.warning(f"⚠️ {len(unmatched_df1)} rows from Dataset 1 could not be matched.")
-                    st.subheader("❌ Unmatched Rows (Dataset 1)")
-                    st.dataframe(unmatched_df1)
-                    st.download_button(
-                        "⬇️ Download Unmatched Rows from Dataset 1",
-                        unmatched_df1.to_csv(index=False).encode('utf-8'),
-                        "unmatched_dataset1.csv",
-                        "text/csv"
-                    )
+                # Add original columns from df2
+                combined_row.update({f'dataset2_{col}': val for col, val in df2.iloc[match_index2].to_dict().items()})
+                matched_rows.append(combined_row)
+                matched_indices_df2.add(match_index2)
+            else:
+                unmatched_df1_rows.append(df1.iloc[index1].to_dict())
+        else:
+            unmatched_df1_rows.append(df1.iloc[index1].to_dict())
 
-                if not unmatched_df2.empty:
-                    st.warning(f"⚠️ {len(unmatched_df2)} rows from Dataset 2 could not be matched.")
-                    st.subheader("❌ Unmatched Rows (Dataset 2)")
-                    st.dataframe(unmatched_df2)
-                    st.download_button(
-                        "⬇️ Download Unmatched Rows from Dataset 2",
-                        unmatched_df2.to_csv(index=False).encode('utf-8'),
-                        "unmatched_dataset2.csv",
-                        "text/csv"
-                    )
+    merged_df = pd.DataFrame(matched_rows)
+    unmatched_df1 = pd.DataFrame(unmatched_df1_rows)
 
+    unmatched_indices_df2 = [i for i in range(len(df2)) if i not in matched_indices_df2]
+    unmatched_df2 = df2.iloc[unmatched_indices_df2]
 
-        except Exception as e:
-            st.error("An error occurred while processing your files.")
-            st.exception(e)
-
-if __name__ == '__main__':
-    run_app()
+    return merged_df, unmatched_df1, unmatched_df2
