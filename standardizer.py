@@ -1,63 +1,92 @@
-# app.py
-from flask import Flask, request, render_template, send_file
+# standardizer.py
 import pandas as pd
-from io import BytesIO
-from standardizer import match_and_merge  # Import the function from your new file
-import yaml
+from rapidfuzz import process, fuzz
+import os
 
-app = Flask(__name__)
+# Define the relative path to the reference file
+REFERENCE_FILE_PATH = os.path.join(os.path.dirname(__file__), "data", "reference.csv")
 
-# Load configuration from config.yaml
-with open('config.yaml', 'r') as file:
-    config = yaml.safe_load(file)
-
-@app.route('/')
-def home():
-    return render_template('index.html')
-
-@app.route('/match', methods=['POST'])
-def match_data():
-    if 'file1' not in request.files or 'file2' not in request.files:
-        return "Please upload both datasets.", 400
-
-    file1 = request.files['file1']
-    file2 = request.files['file2']
-
-    try:
-        df1 = pd.read_csv(file1)
-        df2 = pd.read_csv(file2)
-    except Exception as e:
-        return f"Error reading files. Please ensure they are in a valid CSV format. Error: {e}", 400
-
-    # Get key columns from configuration
-    key_columns = config['matching']['key_columns']
-    threshold = config['matching']['threshold']
-    multi_level_threshold = config['matching']['multi_level_threshold']
-
-    # Call the core matching function from the standardizer module
-    merged_df, unmatched_df1, unmatched_df2 = match_and_merge(
-        df1,
-        df2,
-        key_columns,
-        threshold,
-        multi_level_threshold
-    )
-
-    # Prepare data for download
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        merged_df.to_excel(writer, sheet_name='Merged Data', index=False)
-        unmatched_df1.to_excel(writer, sheet_name='Unmatched (Dataset 1)', index=False)
-        unmatched_df2.to_excel(writer, sheet_name='Unmatched (Dataset 2)', index=False)
-
-    output.seek(0)
+def load_reference_data():
+    """
+    Loads the reference data from the CSV file.
     
-    return send_file(
-        output,
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        as_attachment=True,
-        download_name='merged_data.xlsx'
-    )
+    Returns:
+        DataFrame: The reference dataset.
+    Raises:
+        FileNotFoundError: If the reference file does not exist.
+        pd.errors.EmptyDataError: If the file is empty.
+    """
+    if not os.path.exists(REFERENCE_FILE_PATH):
+        raise FileNotFoundError(f"Reference file not found at: {REFERENCE_FILE_PATH}")
+    
+    try:
+        ref_df = pd.read_csv(REFERENCE_FILE_PATH)
+        ref_df.columns = ref_df.columns.str.strip().str.lower()
+        required_cols = ['region', 'zone', 'woreda']
+        if not all(col in ref_df.columns for col in required_cols):
+            raise ValueError(f"Reference file must contain columns: {', '.join(required_cols)}")
+        return ref_df
+    except pd.errors.EmptyDataError:
+        raise pd.errors.EmptyDataError("The reference file is empty.")
 
-if __name__ == '__main__':
-    app.run(debug=True)
+def match_and_correct(user_df, threshold=80, region_zone_threshold=90):
+    """
+    Corrects Woreda names in a user dataframe by fuzzy matching against a reference list.
+    
+    Parameters:
+        user_df (DataFrame): The user's dataset to be corrected.
+        threshold (int): The fuzzy matching threshold for woreda names.
+        region_zone_threshold (int): The fuzzy matching threshold for region/zone.
+        
+    Returns:
+        tuple: A tuple containing two DataFrames: the corrected DataFrame and a DataFrame of unmatched rows.
+    """
+    try:
+        reference_df = load_reference_data()
+    except (FileNotFoundError, ValueError) as e:
+        # Re-raise the exception to be caught and handled by the Streamlit app
+        raise e
+
+    # Create a new DataFrame for the corrected data
+    corrected_df = user_df.copy()
+    corrected_df['standardized_region'] = ""
+    corrected_df['standardized_zone'] = ""
+    corrected_df['standardized_woreda'] = ""
+    corrected_df['match_score'] = 0.0
+
+    unmatched_rows = []
+
+    # Create a concatenated key string for the reference data
+    reference_df['concatenated_key'] = reference_df['region'] + "_" + reference_df['zone'] + "_" + reference_df['woreda']
+    reference_choices = reference_df['concatenated_key'].tolist()
+
+    for index, row in user_df.iterrows():
+        user_region = str(row.get('region', '')).strip().lower()
+        user_zone = str(row.get('zone', '')).strip().lower()
+        user_woreda = str(row.get('woreda', '')).strip().lower()
+
+        # Concatenate the user's data for a single fuzzy match lookup
+        query_string = f"{user_region}_{user_zone}_{user_woreda}"
+
+        best_match = process.extractOne(query_string, reference_choices, scorer=fuzz.token_set_ratio)
+
+        if best_match and best_match[1] >= threshold:
+            # Match found, get the original row from the reference data
+            match_string, score, ref_index = best_match
+            matched_ref_row = reference_df.iloc[ref_index]
+
+            # Update the corrected_df with standardized names and score
+            corrected_df.loc[index, 'standardized_region'] = matched_ref_row['region']
+            corrected_df.loc[index, 'standardized_zone'] = matched_ref_row['zone']
+            corrected_df.loc[index, 'standardized_woreda'] = matched_ref_row['woreda']
+            corrected_df.loc[index, 'match_score'] = score
+        else:
+            # No match found, add to unmatched list
+            unmatched_rows.append(row.to_dict())
+
+    unmatched_df = pd.DataFrame(unmatched_rows)
+    
+    # Drop the temporary concatenated key column from the reference DataFrame before returning
+    reference_df.drop(columns=['concatenated_key'], inplace=True)
+    
+    return corrected_df, unmatched_df
