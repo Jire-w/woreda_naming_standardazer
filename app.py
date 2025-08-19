@@ -25,7 +25,7 @@ def run_app():
     """, unsafe_allow_html=True)
 
     st.info("""
-    This tool matches records from two datasets based on fuzzy matching of **Region**, **Zone**, **Woreda**, and **Health Facilities** names. It then combines the remaining data from both files into a single output.
+    This tool matches records from two datasets based on fuzzy matching of **Region**, **Zone**, and **Woreda** names. It then combines the remaining data from both files into a single output.
     
     Make sure both of your files are in CSV or Excel (XLSX) format and contain columns for these key fields. The tool will automatically find the best-matching columns.
     """)
@@ -66,7 +66,7 @@ def run_app():
             df2 = read_file(uploaded_file2)
             
             # These are the required column names for our internal logic
-            required_key_columns = ['region', 'zone', 'woreda', 'health_facilities']
+            required_key_columns = ['region', 'zone', 'woreda']
 
             # Function to create a mapping from internal keys to user's column names
             def map_columns(df, required_cols):
