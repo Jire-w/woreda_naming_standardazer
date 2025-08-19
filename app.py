@@ -33,12 +33,12 @@ def run_app():
     col1, col2 = st.columns(2)
     with col1:
         uploaded_file1 = st.file_uploader(
-            "📤 Upload Dataset 1 (e.g., Longitude/Latitude)",
+            "📤 Upload Dataset 1",
             type=["csv", "xlsx"]
         )
     with col2:
         uploaded_file2 = st.file_uploader(
-            "📤 Upload Dataset 2 (e.g., Penta 1/Penta 2)",
+            "📤 Upload Dataset 2",
             type=["csv", "xlsx"]
         )
 
