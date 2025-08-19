@@ -1,6 +1,4 @@
-Flask
+streamlit
 pandas
 rapidfuzz
-pyyaml
-xlsxwriter
-streamlit
+openpyxl
